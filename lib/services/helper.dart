@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fluttertoast/fluttertoast.dart';
-import 'package:helper/services/helper-widget.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:connectivity/connectivity.dart';
@@ -12,6 +12,9 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_html/flutter_html.dart';
 import 'package:date_range_picker/date_range_picker.dart' as DateRagePicker;
+import 'package:http/http.dart' as http;
+
+import 'helper-widget.dart';
 
 /* class list
 
@@ -24,14 +27,31 @@ import 'package:date_range_picker/date_range_picker.dart' as DateRagePicker;
 
 final oCcy = new NumberFormat("#,##0", "en_US");
 
+String __api = 'https://kpm-api-test.kembarputra.com';
+
+setExistApi() async {
+  var prefs = await SharedPreferences.getInstance(),
+      apiString = prefs.getString('api');
+
+  if(apiString != null){
+    __api = prefs.getString('api');
+  }
+}
+
+api(url){
+  setExistApi();
+  return __api+'/'+url;
+}
+
 // tampilkan text dengan mudah
-text(text, {color, double size: 15, bold: false, TextAlign align: TextAlign.left, double spacing: 0, font: 'sans'}){
-  return Text(text.toString(), softWrap: true, textAlign: align, style: TextStyle(
+text(text, {color, size: 15, bold: false, TextAlign align: TextAlign.left, spacing: 0, font: 'sans', TextOverflow overflow}){
+  return Text(
+    text.toString(), overflow: overflow, softWrap: true, textAlign: align, style: TextStyle(
       color: color == null ? Color.fromRGBO(60, 60, 60, 1) : color, 
       fontFamily: font,
-      fontSize: size,
+      fontSize: size.toDouble(),
       fontWeight: bold ? FontWeight.bold : FontWeight.normal,
-      letterSpacing: spacing,
+      letterSpacing: spacing.toDouble(),
     ),
   );
 }
@@ -89,6 +109,11 @@ class PreventScrollGlow extends ScrollBehavior {
 }
 
 class Fn{
+
+  // set default initial timer
+  static timer(){
+    return Timer(Duration(seconds: 0), (){ });
+  }
 
   // convert penomoran ribuan
   static ribuan(int number){
@@ -148,17 +173,56 @@ class Fn{
     }
   }
 
-  // set data ke local storage, setPrefs('user', data, enc: true);
-  static setPrefs(key, data, {enc: false}) async{
-    var prefs = await SharedPreferences.getInstance();
+  // set data ke local storage, setPrefs('user', data, true);
+static setPrefs(key, data, {enc}) async{
+  var prefs = await SharedPreferences.getInstance();
+
+  // jika enc tidak null, set enc by param
+  if(enc != null){
     prefs.setString(key, enc ? encode(data) : data);
+  }else{
+    // set enc by data type, [] = List, {} = Map
+    if(data is List || data is Map){
+      prefs.setString(key, encode(data));
+    }
+
+    else if(data is bool){
+      prefs.setBool(key, data);
+    }
+
+    else if(data is int){
+      prefs.setInt(key, data);
+    }
+
+    else if(data is String){
+      prefs.setString(key, data);
+    }
+
+    else{
+      prefs.setDouble(key, data);
+    }
+
   }
+}
 
   // get data dari local storage, getPrefs('key').then((res){ ... });
-  static getPrefs(key, {dec: false}) async{
+  static getPrefs(key, {dec: false, type: String}) async{
     var prefs = await SharedPreferences.getInstance();
-    var data = prefs.getString(key);
-    return data == null ? 'null' : dec ? decode(data) : data;
+
+    switch (type) {
+      case List: return decode(prefs.getString(key)); break;
+      case Map: return decode(prefs.getString(key)); break;
+      case bool: return prefs.getBool(key); break;
+      case int: return prefs.getInt(key); break;
+      case String: return dec ? decode(prefs.getString(key)) : prefs.getString(key); break;
+      case double: return prefs.getDouble(key);
+      default: print('--- get preferences: the result is null!'); return null;
+    }
+  }
+
+  // set node focus
+  static focus(context, node){
+    FocusScope.of(context).requestFocus(node);
   }
 
   // periksa key apa saja yang tersimpan di local storage, checkPrefs();
@@ -300,9 +364,9 @@ class Fn{
 class Wi{
 
   // appbar
-  static appBar(context, {title = '', elevation = 1, back: true, spacing: 15, List<Widget> actions, autoLeading: false}){
+  static appBar(context, {title = '', Color color, elevation = 1, back: true, spacing: 15, List<Widget> actions, autoLeading: false}){
     return back ? new AppBar(
-      backgroundColor: Colors.white,
+      backgroundColor: color == null ? Colors.white : color,
       automaticallyImplyLeading: autoLeading,
       titleSpacing: 0,
       elevation: elevation.toDouble(),
@@ -311,7 +375,7 @@ class Wi{
       actions: actions,
     ) : 
     new AppBar(
-      backgroundColor: Colors.white,
+      backgroundColor: color == null ? Colors.white : color,
       automaticallyImplyLeading: autoLeading,
       titleSpacing: spacing.toDouble(),
       elevation: elevation.toDouble(),
@@ -357,7 +421,7 @@ class Wi{
                                   title == null ? SizedBox.shrink() : Container(
                                     child: html(title, bold: true, size: 17), margin: EdgeInsets.only(bottom: 5), 
                                   ),
-                                  html(message)
+                                  message is Widget ? message : html(message)
                               ],)
                             ),
 
@@ -408,7 +472,7 @@ class Wi{
   }
 
   // spiner animasi
-  static spiner({size: 15, Color color, stroke: 2, margin: 0, marginX: 0, message: 'loading', position: 'default'}){
+  static spiner({size: 15, Color color, stroke: 2, margin: 1, marginX: 0, position: 'center'}){
     Widget spinerWidget(){
       return Container(
         margin: margin == 0 ? EdgeInsets.only(left: marginX.toDouble(), right: marginX.toDouble()) : EdgeInsets.all(margin.toDouble()),
@@ -477,18 +541,30 @@ class Wi{
     });
   }
 
-  static confirm(context, {Function then}){
+  static confirm(context, {Function then, String message}){
     showDialog(
       context: context,
       builder: (BuildContext context){
-        return HConfirmation();
+        return HConfirmation(message: message);
       }
     ).then((res){
       if(then != null) then(res);
     });
   }
 
-  
+  static itext({@required icon, @required Widget child, double space: 7, MainAxisAlignment mainAxisAlignment}){
+    return Row(
+      mainAxisAlignment: mainAxisAlignment == null ? MainAxisAlignment.start : mainAxisAlignment,
+      children: <Widget>[
+        icon is IconData ? Icon(icon, size: 14, color: Colors.black54) : icon,
+        
+        Container(
+          margin: EdgeInsets.only(left: space),
+          child: child
+        )
+      ],
+    );
+  }
 
 
 
@@ -1021,10 +1097,34 @@ class _HListState extends State<HList> {
 
 class Fc {
 
+  static search({hint: '', length: 255, TextEditingController controller, FocusNode node, autofocus: true, TextInputType keyboard, TextInputAction inputAction, Function onSubmit, Function onChange}){
+    return TextField(
+      controller: controller,
+      focusNode: node,
+      autofocus: autofocus,
+      keyboardType: keyboard,
+      textInputAction: inputAction,
+      onSubmitted: onSubmit,
+      onChanged: onChange,
+      decoration: new InputDecoration(
+        alignLabelWithHint: true,
+        border: InputBorder.none,
+        isDense: true,
+        hintText: hint,
+        hintStyle: TextStyle(fontFamily: 'sans'),
+        contentPadding: EdgeInsets.only(left: 0, right: 0, top: 10, bottom: 10)
+      ),
+      style: TextStyle(fontFamily: 'sans'),
+      inputFormatters: [
+        LengthLimitingTextInputFormatter(length),
+      ],
+    );
+  }
+
   static input({
-    label, hint: '', length: 255, TextEditingController controller, FocusNode node,
+    label, hint: '', length: 255, TextEditingController controller, FocusNode node, bool enabled: true,
     TextInputType keyboard, TextInputAction inputAction, Function onSubmit, Function onChange, bool obsecure: false
-    
+      
     }){
     
     return Column(
@@ -1041,7 +1141,7 @@ class Fc {
           decoration: BoxDecoration(
             border: Border.all(color: Colors.black26),
             borderRadius: BorderRadius.circular(4),
-            color: Colors.white
+            color: enabled ? Colors.white : Clr.black(opacity: .07)
           ),
           child: TextField(
           controller: controller,
@@ -1050,6 +1150,7 @@ class Fc {
           keyboardType: keyboard,
           textInputAction: inputAction,
           onSubmitted: onSubmit,
+          enabled: enabled,
           onChanged: onChange,
           obscureText: obsecure,
           decoration: new InputDecoration(
@@ -1076,60 +1177,181 @@ class Fc {
     );
   }
 
-  static radio({label, @required List values, @required group, Function onChange}){
-    return Container(
-      margin: EdgeInsets.only(bottom: 25),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          label == null ? SizedBox.shrink() : 
-          Container(
-            margin: EdgeInsets.only(bottom: 7),
-            child: text(label, bold: true),
-          ),
+  // static radio({label, @required List values, @required group, Function onChange}){
+  //   return Container(
+  //     margin: EdgeInsets.only(bottom: 25),
+  //     child: Column(
+  //       crossAxisAlignment: CrossAxisAlignment.start,
+  //       children: <Widget>[
+  //         label == null ? SizedBox.shrink() : 
+  //         Container(
+  //           margin: EdgeInsets.only(bottom: 7),
+  //           child: text(label, bold: true),
+  //         ),
 
-          SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(
-            children: List.generate(values.length, (int i){
-              return Container(
-                margin: EdgeInsets.only(right: 10),
-                height: 30,
-                child: Material(
-                  borderRadius: BorderRadius.circular(20),
-                  child: InkWell(
-                    onTap: (){ if(onChange != null) onChange({'value': values[i], 'index': i}); },
-                    borderRadius: BorderRadius.circular(20),
-                    child: Container(
-                      padding: EdgeInsets.only(right: 15),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.black12),
-                        borderRadius: BorderRadius.circular(20)
-                      ),
-                      child: Row(
-                        children: <Widget>[
-                          Radio(
-                            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            value: i,
-                            groupValue: group,
-                            onChanged: (int){
-                              if(onChange != null) onChange({'value': values[i], 'index': i});
-                            },
-                          ), text(Fn.ucwords(values[i]))
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            }),
-          ))
-        ],
-      ),
-    );
+  //         SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(
+  //           children: List.generate(values.length, (int i){
+  //             return Container(
+  //               margin: EdgeInsets.only(right: 10),
+  //               height: 30,
+  //               child: Material(
+  //                 borderRadius: BorderRadius.circular(20),
+  //                 child: InkWell(
+  //                   onTap: (){ if(onChange != null) onChange({'value': values[i], 'index': i}); },
+  //                   borderRadius: BorderRadius.circular(20),
+  //                   child: Container(
+  //                     padding: EdgeInsets.only(right: 15),
+  //                     decoration: BoxDecoration(
+  //                       border: Border.all(color: Colors.black12),
+  //                       borderRadius: BorderRadius.circular(20)
+  //                     ),
+  //                     child: Row(
+  //                       children: <Widget>[
+  //                         Radio(
+  //                           materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+  //                           value: i,
+  //                           groupValue: group,
+  //                           onChanged: (int){
+  //                             if(onChange != null) onChange({'value': values[i], 'index': i});
+  //                           },
+  //                         ), text(Fn.ucwords(values[i]))
+  //                       ],
+  //                     ),
+  //                   ),
+  //                 ),
+  //               ),
+  //             );
+  //           }),
+  //         ))
+  //       ],
+  //     ),
+  //   );
+  // }
+
+  static radio({label, @required List values, @required String checked, Function onChange}){
+    return HRadioButton(label: label, values: values, checked: checked, onChange: onChange);
+  }
+
+  static checkbox({label, @required List values, @required List checked, Function onChange}){
+    return HCheckBox(label: label, values: values, checked: checked, onChange: onChange);
   }
 
   static dropdown({String label, @required TextEditingController controller, @required List options, List values, }){
     return HDropdown(label: label, options: options, controller: controller, values: values);
   }
 
+  static select(context, {label, @required Widget options, TextEditingController controller, bool enabled: true, Function onChange}){
+    return HSelect(context, label: label, options: options, controller: controller, enabled: enabled, onChange: onChange);
+  }
+
+  static button({Widget child, EdgeInsetsGeometry padding, EdgeInsetsGeometry margin, BorderRadiusGeometry radius, Color color, double width, Function onTap}){
+    return Container(
+      margin: margin == null ? EdgeInsets.only(bottom: 25) : margin,
+      width: width == null ? null : width,
+      child: Inkl(
+        onTap: onTap,
+        color: color == null ? Colors.blueGrey : color,
+        radius: radius == null ? BorderRadius.circular(4) : radius,
+        padding: padding == null ? EdgeInsets.all(11) : padding,
+        child: child
+      ),
+    );
+  }
+
+
+}
+
+class Api{
+
+  static result(obj){
+    if(obj != null){
+      print(obj.request);
+      print(obj.statusCode);
+      print(obj.body);
+    }
+  }
+
+  static post(url, {@required formData, authorization: true, Function then}) async {
+    var prefs = await SharedPreferences.getInstance();
+
+    Fn.checkConnection().then((con){
+      if(con){
+        http.post(api(url), body: formData, headers: !authorization ? {} : {
+          HttpHeaders.authorizationHeader: prefs.getString('token'), "Accept": "application/json"
+        }).then((res){
+          if(then != null) then(res);
+        });
+      }else{
+        Fn.toast('Periksa koneksi internet!');
+      }
+    });
+
+    
+  }
+
+  static get(url, {Function then}) async {
+    var prefs = await SharedPreferences.getInstance();
+
+    http.get(api(url), headers: {
+      HttpHeaders.authorizationHeader: prefs.getString('token'), "Accept": "application/json"
+    }).then((res){ 
+      if(then != null) then(res);
+    });
+  }
+
+  static put(url, {@required formData, Function then}) async {
+    var prefs = await SharedPreferences.getInstance();
+
+    http.put(api(url), body: formData, headers: {
+      HttpHeaders.authorizationHeader: prefs.getString('token'), "Accept": "application/json"
+    }).then((res){ 
+      if(then != null) then(res);
+    });
+  }
+
+  static delete(url, {Function then}) async {
+    var prefs = await SharedPreferences.getInstance();
+
+    http.delete(api(url), headers: {
+      HttpHeaders.authorizationHeader: prefs.getString('token'), "Accept": "application/json"
+    }).then((res){ 
+      if(then != null) then(res);
+    });
+  }
+  
+}
+
+
+class Message{
+
+  static error(e, {String message: 'Terjadi kesalahan', Timer timer}){
+    print('error : '+e.toString());
+    Fn.toast(message);
+
+    if(timer != null){
+      timer.toString();
+    }
+  }
+
+  static connection(context, {Timer timer}){
+    if(timer != null){
+      timer.cancel();
+    }
+    
+    Wi.box(context, title: 'Network Connection!', message: 'Sepertinya terjadi masalah pada koneksi internet Anda, periksa jaringan dan pastikan koneksi internet Anda stabil.');
+  }
+
+  static fail({obj, String message: 'Terjadi kesalahan', Timer timer}){
+    Fn.toast(message);
+    if(timer != null){
+      timer.cancel();
+    }
+
+    if(obj != null){
+      print(obj.request);
+      print(obj.statusCode);
+      print(obj.body);
+    }
+  }
 
 }

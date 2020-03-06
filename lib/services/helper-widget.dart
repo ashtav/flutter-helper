@@ -1,8 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:helper/services/helper.dart';
 import 'package:flutter/services.dart';
+
+import 'helper.dart';
 
 class HOptions extends StatefulWidget {
   final List<String> options;
@@ -269,6 +270,70 @@ class _HNumberInputState extends State<HNumberInput> {
   }
 }
 
+class HSelect extends StatefulWidget {
+  final ctx;
+  final String label;
+  final Function onChange;
+  final bool enabled;
+  final Widget options;
+  final TextEditingController controller;
+
+  HSelect(this.ctx, {this.label, @required this.options, @required this.controller, this.enabled: true, this.onChange});
+
+  @override
+  _HSelectState createState() => _HSelectState();
+}
+
+class _HSelectState extends State<HSelect> {
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: EdgeInsets.only(bottom: 25),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          widget.label == null ? SizedBox.shrink() : 
+          Container(
+            margin: EdgeInsets.only(bottom: 7),
+            child: text(widget.label, bold: true),
+          ),
+
+          Stack(
+            children: [
+              Inkl(
+                onTap: !widget.enabled ? null : (){
+                  modal(widget.ctx, child: widget.options, onClose: (res){
+                    if(res != null){
+                      widget.onChange(res);
+                    }
+                  });
+                },
+                color: !widget.enabled ? Clr.black(opacity: .07) : Colors.white,
+                child: Container(
+                  padding: EdgeInsets.only(left: 15, right: 15, top: 10, bottom: 10),
+                  width: mquery(context),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.black26),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: text(widget.controller.text),
+                ),
+              ),
+
+              Positioned(
+                right: 10, top: 7,
+                child: IgnorePointer(child: Icon(Icons.expand_more)),
+              ),
+
+            ]
+          )
+        ]
+      ),
+    );
+  }
+}
+
 class HDropdown extends StatefulWidget {
   final String label;
   final List options, values;
@@ -399,6 +464,148 @@ class _HDropdownState extends State<HDropdown> {
 
           
         ]
+      ),
+    );
+  }
+}
+
+
+class HRadioButton extends StatefulWidget {
+  final String label; var checked;
+  final List values;
+  final Function onChange;
+
+  HRadioButton({this.label, @required this.values, @required this.checked, this.onChange});
+
+  @override
+  _HRadioButtonState createState() => _HRadioButtonState();
+}
+
+class _HRadioButtonState extends State<HRadioButton> {
+
+  void _onChecked(i){ 
+    setState(() {
+      widget.checked = widget.values[i];
+    });
+
+    widget.onChange(widget.checked);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: EdgeInsets.only(bottom: 25),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          widget.label == null ? SizedBox.shrink() : 
+          Container(
+            margin: EdgeInsets.only(bottom: 7),
+            child: text(widget.label, bold: true),
+          ),
+
+          SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(
+            children: List.generate(widget.values.length, (int i){
+              var checked = widget.values[i].toLowerCase() == widget.checked.toLowerCase();
+
+              return Container(
+                margin: EdgeInsets.only(right: 10),
+                child: Inkl(
+                  onTap: (){ _onChecked(i); },
+                  child: Row(
+                    children: [
+                      Container(
+                        margin: EdgeInsets.only(right: 10),
+                        height: 20, width: 20,
+                        // padding: EdgeInsets.only(bottom: 3),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(50),
+                          border: checked ? Border() : Border.all(color: Colors.black38),
+                          color: checked ? Colors.blue : Colors.white,
+                        ),
+                        child: checked ? Icon(Icons.fiber_manual_record, color: Colors.white, size: 20) : SizedBox.shrink(),
+                      ), text(widget.values[i])
+                    ]
+                  ),
+                )
+                
+              );
+            }),
+          ))
+        ],
+      ),
+    );
+  }
+}
+
+class HCheckBox extends StatefulWidget {
+  final String label;
+  final List values, checked;
+  final Function onChange;
+
+  HCheckBox({this.label, @required this.values, @required this.checked, this.onChange});
+
+  @override
+  _HCheckBoxState createState() => _HCheckBoxState();
+}
+
+class _HCheckBoxState extends State<HCheckBox> {
+
+  void _onChecked(i){
+    var v = widget.values[i];
+
+    setState(() {
+      if(widget.checked.indexOf(v) > -1){
+        widget.checked.remove(v);
+      }else{
+        widget.checked.add(v);
+      }
+    });
+
+    widget.onChange(widget.checked);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: EdgeInsets.only(bottom: 25),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          widget.label == null ? SizedBox.shrink() : 
+          Container(
+            margin: EdgeInsets.only(bottom: 7),
+            child: text(widget.label, bold: true),
+          ),
+
+          SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(
+            children: List.generate(widget.values.length, (int i){
+              var checkeds = widget.checked.indexOf(widget.values[i]);
+              return Container(
+                margin: EdgeInsets.only(right: 10),
+                child: Inkl(
+                  onTap: (){ _onChecked(i); },
+                  child: Row(
+                    children: [
+                      Container(
+                        margin: EdgeInsets.only(right: 10),
+                        height: 20, width: 20,
+                        // padding: EdgeInsets.only(bottom: 3),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(2),
+                          border: checkeds > -1 ? Border() : Border.all(color: Colors.black38),
+                          color: checkeds > -1 ? Colors.blue : Colors.white,
+                        ),
+                        child: checkeds > -1 ? Icon(Icons.check, color: Colors.white, size: 20) : SizedBox.shrink(),
+                      ), text(widget.values[i])
+                    ]
+                  ),
+                )
+                
+              );
+            }),
+          ))
+        ],
       ),
     );
   }

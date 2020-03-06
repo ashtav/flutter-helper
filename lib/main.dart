@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:helper/samples/forms.dart';
+import 'package:helper/samples/list-icon.dart';
 import 'package:helper/samples/options.dart';
+import 'package:helper/samples/short-widget.dart';
 import 'package:helper/services/helper.dart';
 
 import 'samples/date-picker.dart';
@@ -46,17 +48,18 @@ class _HomeState extends State<Home> {
 
   void samples(menu){
     switch (menu) {
-      case 'forms': modal(context, child: Forms()); break;
+      case 'forms': modal(context, child: Forms(ctx: context)); break;
       case 'datepicker': modal(context, child: DatePicker()); break;
       case 'options': modal(context, child: Options()); break;
-
+      case 'shortwidget': modal(context, child: ShortWidget()); break;
+      case 'icons': modal(context, child: ListIcons()); break;
       default:
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    List<String> menus = ['Forms','Date Picker','Options'];
+    List<String> menus = ['Forms','Date Picker','Options','Short Widget','Icons'];
 
     return Scaffold(
       appBar: Wi.appBar(context, title: 'Helper', back: false),
