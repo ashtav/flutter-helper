@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:helper/samples/dragable.dart';
 import 'package:helper/samples/forms.dart';
 import 'package:helper/samples/list-icon.dart';
 import 'package:helper/samples/options.dart';
@@ -6,6 +7,8 @@ import 'package:helper/samples/short-widget.dart';
 import 'package:helper/services/helper.dart';
 
 import 'samples/date-picker.dart';
+import 'samples/snake-game.dart';
+import 'service2/sample.dart';
 
 void main() => runApp(MyApp());
 
@@ -33,6 +36,10 @@ class MyApp extends StatelessWidget {
           color: _black
         ),
         buttonTheme: ButtonThemeData(minWidth: 0),
+        textTheme: TextTheme(
+          body1: TextStyle(fontFamily: 'sans', fontSize: 15)
+        )
+        
      ),
     home: Home(),
     );
@@ -53,13 +60,16 @@ class _HomeState extends State<Home> {
       case 'options': modal(context, child: Options()); break;
       case 'shortwidget': modal(context, child: ShortWidget()); break;
       case 'icons': modal(context, child: ListIcons()); break;
+      case 'dragable': modal(context, child: Dragable()); break;
+      case 'snakegame': modal(context, child: SnakeGame()); break;
+      case 'service2': modal(context, child: Sample()); break;
       default:
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    List<String> menus = ['Forms','Date Picker','Options','Short Widget','Icons'];
+    List<String> menus = ['Forms','Date Picker','Options','Short Widget','Icons','Dragable','Snake Game','Service 2'];
 
     return Scaffold(
       appBar: Wi.appBar(context, title: 'Helper', back: false),

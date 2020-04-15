@@ -13,6 +13,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_html/flutter_html.dart';
 import 'package:date_range_picker/date_range_picker.dart' as DateRagePicker;
 import 'package:http/http.dart' as http;
+import 'dart:math' as math;
 
 import 'helper-widget.dart';
 
@@ -43,6 +44,10 @@ api(url){
   return __api+'/'+url;
 }
 
+debug(String label, data){
+  print('# '+label+' -> '+data.toString());
+}
+
 // tampilkan text dengan mudah
 text(text, {color, size: 15, bold: false, TextAlign align: TextAlign.left, spacing: 0, font: 'sans', TextOverflow overflow}){
   return Text(
@@ -56,7 +61,7 @@ text(text, {color, size: 15, bold: false, TextAlign align: TextAlign.left, spaci
   );
 }
 
-html(message, {borderBottom, double padding: 0, double size: 13, bold: false, TextAlign align: TextAlign.left}){
+html(message, {borderBottom, double padding: 0, double size: 13, bold: false, Color color, TextAlign align: TextAlign.left}){
   return Container(
     padding: EdgeInsets.all(padding),
     decoration: BoxDecoration(
@@ -67,7 +72,7 @@ html(message, {borderBottom, double padding: 0, double size: 13, bold: false, Te
       )
     ),
     child: Html(data: message, customTextAlign: (node) { return align; },
-    defaultTextStyle: TextStyle(fontFamily: 'sans', fontSize: size, fontWeight: bold ? FontWeight.bold : FontWeight.normal))
+    defaultTextStyle: TextStyle(fontFamily: 'sans', fontSize: size, color: color == null ? Colors.black87 : color, fontWeight: bold ? FontWeight.bold : FontWeight.normal))
   );
 }
 
@@ -79,14 +84,23 @@ mquery(context, {attr: 'width'}){
   }
 }
 
-modal(context, {Widget child, Function onClose, height: 'full', Color background: Colors.white}) async {
+modal(context, {Widget child, Function onClose, height: 'full', bool fullScreen: false, Color color, double radius: 0}) async {
+  var _height = MediaQuery.of(context).size.height;
+
   showModalBottomSheet(
-    backgroundColor: background,
+    backgroundColor: Colors.transparent,
     context: context,
     builder: (BuildContext _) {
-      return Container(
-        height: height != 'full' ? height.toDouble() :  MediaQuery.of(context).size.height - MediaQuery.of(context).padding.top,
-        child: child
+      return ClipRRect(
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(radius),
+          topRight: Radius.circular(radius),
+        ),
+        child: Container(
+          color: color == null ? Colors.white : color,
+          height: fullScreen ? _height : height != 'full' ? height.toDouble() :  _height - MediaQuery.of(context).padding.top,
+          child: child
+        ),
       );
     },
     isScrollControlled: true,
@@ -214,7 +228,7 @@ static setPrefs(key, data, {enc}) async{
       case Map: return decode(prefs.getString(key)); break;
       case bool: return prefs.getBool(key); break;
       case int: return prefs.getInt(key); break;
-      case String: return dec ? decode(prefs.getString(key)) : prefs.getString(key); break;
+      case String: return prefs.getString(key) == null ? null : dec ? decode(prefs.getString(key)) : prefs.getString(key); break;
       case double: return prefs.getDouble(key);
       default: print('--- get preferences: the result is null!'); return null;
     }
@@ -270,6 +284,7 @@ static setPrefs(key, data, {enc}) async{
     _d(dt){ return DateFormat( dt ).format(dateParse); }
 
     switch (format) {
+      case 'd-m-Y h:i:s': return DateFormat( dd+'-'+mm+'-y' ).format(dateParse)+' '+date.split(' ')[1]; break;
       case 'd': return DateFormat(d == 1 ? '0d' : 'd').format(dateParse); break;
       case 'M': return DateFormat('MMM').format(dateParse); break;
       case 'F': return DateFormat('MMMM').format(dateParse); break;
@@ -322,7 +337,7 @@ static setPrefs(key, data, {enc}) async{
 
   // hitung umur, format tanggal yyyy-mm-dd hh:ii:ss / yyyy-mm-dd
   static calcAge(date){
-    if(date == null){
+    if(date == null || date == ''){
       return '-';
     }else{
       var today = DateTime.now(),
@@ -357,11 +372,82 @@ static setPrefs(key, data, {enc}) async{
     return char.toUpperCase();
   }
 
+  static formatBytes(bytes, {decimals: 2}){
+    if(bytes == 0) return '0 Bytes';
+
+    var k = 1024,
+        dm = decimals < 0 ? 0 : decimals,
+        sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
+
+    var i = (math.log(bytes) / math.log(k)).floor();
+
+    return (bytes / math.pow(k, i)).toStringAsFixed(dm)+' '+sizes[i];
+  }
+
+  static cutHalf(String s, {int maxLength: 40}){
+    if(s.length < maxLength) return s;
+
+    var ls = s.length,
+        first = s.substring(0, ((ls/3).round()) + (maxLength/3).round()),
+        end = s.substring(ls - 7, ls);
+
+    return first+'...'+end;
+  }
+
 
 }
 
 // kumpulan widget
 class Wi{
+
+  static listExpanded({Widget title, List list, bool expand: false, Function onExpand, Function onListTap}){
+    return ListExpanded(title: title, list: list, expand: expand, onExpand: onExpand, onListTap: onListTap);
+  }
+
+  static alertMsg({@required Widget child, double mBottom: 15, double padding: 15, Color color, BoxBorder border, theme: 'default'}){
+
+    return Container(
+      padding: EdgeInsets.all(padding),
+      margin: EdgeInsets.only(bottom: mBottom),
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: color == null ? theme == 'default' ? Colors.blueGrey[50] : Colors.blue[100] : color,
+        borderRadius: BorderRadius.circular(4),
+        border: border == null ? theme == 'default' ? Border.all(color: Colors.blueGrey[100]) : Border.all(color: Colors.blue[200]) : border
+      ),
+      child: child,
+    );
+  }
+
+  // show dialog
+  static dialog(context, {dismiss: true, bool setMaterial: false, MainAxisAlignment position, @required Widget child, Function then}){
+    return showDialog(
+      context: context,
+      barrierDismissible: dismiss,
+      builder: (BuildContext context){
+        return !setMaterial ? child : Column(
+          mainAxisAlignment: position == null ? MainAxisAlignment.center : position,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: mquery(context),
+              margin: EdgeInsets.all(15),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: Material(
+                  child: child,
+                ),
+              ),
+            )
+          ]
+        );
+      }
+    ).then((res){
+      if(then != null){
+        then(res);
+      }
+    });
+  }
 
   // appbar
   static appBar(context, {title = '', Color color, elevation = 1, back: true, spacing: 15, List<Widget> actions, autoLeading: false}){
@@ -385,7 +471,7 @@ class Wi{
   }
 
   // box alert message
-  static box(context, {dismiss: true, title, message: ''}){
+  static box(context, {dismiss: true, Color color, title, message: ''}){
     showDialog(
       context: context,
       barrierDismissible: dismiss,
@@ -400,13 +486,13 @@ class Wi{
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(5),
                 child: Material(
-                  color: Colors.white,
+                  color: Colors.transparent,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
 
                     children: <Widget>[
                       Container(
-                        color: Colors.white,
+                        color: color == null ? Colors.white : color,
                         child: Column(
                           children: <Widget>[
                       
@@ -419,7 +505,7 @@ class Wi{
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: <Widget>[
                                   title == null ? SizedBox.shrink() : Container(
-                                    child: html(title, bold: true, size: 17), margin: EdgeInsets.only(bottom: 5), 
+                                    child: title is Widget ? title : html(title, bold: true, size: 17), margin: EdgeInsets.only(bottom: 5), 
                                   ),
                                   message is Widget ? message : html(message)
                               ],)
@@ -440,13 +526,14 @@ class Wi{
   }
 
   // tampilkan saat data kosong
-  static nodata({message: '', img: 'no-data.png', Function onRefresh, Function onTap}){
+  static nodata({message: '', img: 'no-data.png', Function onRefresh, double marginY: 0, Function onTap}){
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: <Widget>[
           Container(
+            margin: EdgeInsets.only(top: marginY, bottom: marginY),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               mainAxisAlignment: MainAxisAlignment.center,
@@ -503,7 +590,7 @@ class Wi{
     final DateTime picked = await showDatePicker(
       context: context,
       initialDate: init == null ? DateTime.now() : init,
-      firstDate: min == null ? DateTime(1950, 0) : min,
+      firstDate: min == null ? DateTime(1800, 0) : min,
       lastDate: max == null ? DateTime(2030) : max
     );
 
@@ -541,7 +628,7 @@ class Wi{
     });
   }
 
-  static confirm(context, {Function then, String message}){
+  static confirm(context, {Function then, String message: 'Yakin ingin menghapus data ini?'}){
     showDialog(
       context: context,
       builder: (BuildContext context){
@@ -886,6 +973,30 @@ class Clr{
     return Color.fromRGBO(60, 60, 60, opacity);
   }
 
+  static black05(){
+    return Color.fromRGBO(242, 242, 242, 1);
+  }
+
+  static softGrey(){
+    return Color.fromRGBO(217, 228, 237, 1);
+  }
+
+  static softBlue(){
+    return Color.fromRGBO(226, 242, 254, 1);
+  }
+
+  static softGreen(){
+    return Color.fromRGBO(217, 242, 212, 1);
+  }
+
+  static softOrange(){
+    return Color.fromRGBO(251, 237, 224, 1);
+  }
+
+  static softYellow(){
+    return Color.fromRGBO(247, 246, 202, 1);
+  }
+
   static white({double opacity: 1}){
     return Color.fromRGBO(255, 255, 255, opacity);
   }
@@ -897,14 +1008,14 @@ class Clr{
 
 // class ini dapat digunakan sebagai button, atau element dengan splash
 class Inkl extends StatelessWidget {
-  Inkl({this.key, this.child, this.elevation : 0, this.onTap, this.onLongPress, this.padding, this.color, this.splash, this.radius, this.border}); 
+  Inkl({this.key, this.child, this.elevation : 0, this.onTap, this.onLongPress, this.padding, this.color, this.splash, this.highlightColor, this.radius, this.border}); 
   
   final Key key;
   final Widget child;
   final Function onTap;
   final Function onLongPress;
   final EdgeInsetsGeometry padding;
-  final Color color, splash;
+  final Color color, splash, highlightColor;
   final BorderRadiusGeometry radius;
   final BoxBorder border;
   final double elevation;
@@ -919,6 +1030,7 @@ class Inkl extends StatelessWidget {
       child: InkWell(
         onLongPress: onLongPress,
         splashColor: splash,
+        highlightColor: highlightColor,
         onTap: onTap,
         borderRadius: radius,
         child: Container(
@@ -1024,6 +1136,11 @@ class AnimatedCountState extends State<AnimatedCount> with TickerProviderStateMi
   }
 
   @override
+  void dispose() {
+    super.dispose(); _controller.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return new AnimatedBuilder(
       animation: _animation,
@@ -1121,11 +1238,55 @@ class Fc {
     );
   }
 
+  static transparent({
+    hint: '', length: 255, maxlines: 1, minLines, double fontSize: 16, FontWeight weight,
+    EdgeInsetsGeometry padding,
+    TextEditingController controller, FocusNode node, autofocus: false, bool enabled: true, TextInputType keyboard, TextInputAction inputAction, Function onSubmit, Function onChange}){
+    
+    return TextField(
+      controller: controller,
+      focusNode: node,
+      autofocus: autofocus,
+      keyboardType: keyboard,
+      textInputAction: inputAction,
+      enabled: enabled,
+      onSubmitted: onSubmit,
+      onChanged: onChange,
+      minLines: minLines,
+      maxLines: maxlines,
+      decoration: new InputDecoration(
+        alignLabelWithHint: true,
+        border: InputBorder.none,
+        isDense: true,
+        hintText: hint,
+        hintStyle: TextStyle(fontFamily: 'sans', fontSize: fontSize),
+        contentPadding: padding == null ? EdgeInsets.only(left: 0, right: 0, top: 10, bottom: 10) : padding
+      ),
+      style: TextStyle(fontFamily: 'sans', fontSize: fontSize, fontWeight: weight),
+      inputFormatters: [
+        LengthLimitingTextInputFormatter(length),
+      ],
+    );
+  }
+
+  static toggle({Function onChange, bool value: false, bool enabled: true, String label}){
+    return HToggle(onChange: onChange, value: value, enabled: enabled, label: label);
+  }
+
   static input({
-    label, hint: '', length: 255, TextEditingController controller, FocusNode node, bool enabled: true,
+    label, hint: '', length: 255, int minLines: 1, int maxLines, double mb: 25, TextEditingController controller, FocusNode node, bool enabled: true,
     TextInputType keyboard, TextInputAction inputAction, Function onSubmit, Function onChange, bool obsecure: false
       
     }){
+
+    InputDecoration inputDecoration = new InputDecoration(
+      alignLabelWithHint: true,
+      border: InputBorder.none,
+      isDense: true,
+      hintText: hint,
+      hintStyle: TextStyle(fontFamily: 'sans'),
+      contentPadding: EdgeInsets.only(left: 15, right: 15, top: 10, bottom: 10)
+    );
     
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1137,35 +1298,37 @@ class Fc {
         ),
 
         Container(
-          margin: EdgeInsets.only(bottom: 25),
+          margin: EdgeInsets.only(bottom: mb),
           decoration: BoxDecoration(
             border: Border.all(color: Colors.black26),
             borderRadius: BorderRadius.circular(4),
             color: enabled ? Colors.white : Clr.black(opacity: .07)
           ),
-          child: TextField(
-          controller: controller,
-          focusNode: node,
-          // maxLines: lines,
-          keyboardType: keyboard,
-          textInputAction: inputAction,
-          onSubmitted: onSubmit,
-          enabled: enabled,
-          onChanged: onChange,
-          obscureText: obsecure,
-          decoration: new InputDecoration(
-            alignLabelWithHint: true,
-            border: InputBorder.none,
-            isDense: true,
-            hintText: hint,
-            hintStyle: TextStyle(fontFamily: 'sans'),
-            contentPadding: EdgeInsets.only(left: 15, right: 15, top: 10, bottom: 10)
+          child: maxLines != null ? TextField(
+            controller: controller, focusNode: node, minLines: minLines,
+            maxLines: maxLines, keyboardType: keyboard, textInputAction: inputAction, onSubmitted: onSubmit,
+            enabled: enabled, onChanged: onChange, decoration: inputDecoration,
+            style: TextStyle(fontFamily: 'sans'),
+            inputFormatters: [
+              LengthLimitingTextInputFormatter(length),
+            ],
+          ) :
+          
+          TextField(
+            controller: controller,
+            focusNode: node,
+            keyboardType: keyboard,
+            textInputAction: inputAction,
+            onSubmitted: onSubmit,
+            enabled: enabled,
+            onChanged: onChange,
+            obscureText: obsecure,
+            decoration: inputDecoration,
+            style: TextStyle(fontFamily: 'sans'),
+            inputFormatters: [
+              LengthLimitingTextInputFormatter(length),
+            ],
           ),
-          style: TextStyle(fontFamily: 'sans'),
-          inputFormatters: [
-            LengthLimitingTextInputFormatter(length),
-          ],
-        ),
         )
       ],
     );
@@ -1228,12 +1391,16 @@ class Fc {
   //   );
   // }
 
-  static radio({label, @required List values, @required String checked, Function onChange}){
-    return HRadioButton(label: label, values: values, checked: checked, onChange: onChange);
+  static radio({label, @required List values, @required String checked, Function onChange, double mb: 25, double mt: 0}){
+    return HRadioButton(label: label, values: values, checked: checked, onChange: onChange, mb: mb, mt: mt);
   }
 
-  static checkbox({label, @required List values, @required List checked, Function onChange}){
-    return HCheckBox(label: label, values: values, checked: checked, onChange: onChange);
+  static optionBox({label, @required List values, @required String checked, Function onChange}){
+    return HOptionBox(label: label, values: values, checked: checked, onChange: onChange);
+  }
+
+  static checkbox({label, @required List values, @required List checked, Function onChange, bool enabled: true, double marginY}){
+    return HCheckBox(label: label, values: values, checked: checked, onChange: onChange, enabled: enabled, marginY: marginY);
   }
 
   static dropdown({String label, @required TextEditingController controller, @required List options, List values, }){
@@ -1244,9 +1411,50 @@ class Fc {
     return HSelect(context, label: label, options: options, controller: controller, enabled: enabled, onChange: onChange);
   }
 
-  static button({Widget child, EdgeInsetsGeometry padding, EdgeInsetsGeometry margin, BorderRadiusGeometry radius, Color color, double width, Function onTap}){
+  static select2(context, {String label, Widget icon, TextEditingController controller, Function onTap}){
     return Container(
-      margin: margin == null ? EdgeInsets.only(bottom: 25) : margin,
+      margin: EdgeInsets.only(bottom: 25),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          label == null ? SizedBox.shrink() : 
+          Container(
+            margin: EdgeInsets.only(bottom: 7),
+            child: text(label, bold: true),
+          ),
+
+          Inkl(
+            onTap: onTap,
+            radius: BorderRadius.circular(4),
+            child: Stack(
+              children: [
+                Container(
+                  padding: EdgeInsets.only(left: 15, right: 15, top: 10, bottom: 10),
+                  width: mquery(context),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    border: Border.all(color: Colors.black26),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: text(controller.text),
+                ),
+
+                icon == null ? SizedBox.shrink() :
+                Positioned(
+                  right: 8, top: 8,
+                  child: icon,
+                )
+              ]
+            )
+          ),
+        ]
+      )
+    );
+  }
+
+  static button({Widget child, EdgeInsetsGeometry padding, EdgeInsetsGeometry margin, BorderRadiusGeometry radius, Color color, double width, double mb: 25, Function onTap}){
+    return Container(
+      margin: margin == null ? EdgeInsets.only(bottom: mb) : margin,
       width: width == null ? null : width,
       child: Inkl(
         onTap: onTap,
@@ -1354,4 +1562,103 @@ class Message{
     }
   }
 
+}
+
+class CircleProgressBarPainter extends CustomPainter {
+  final double percentage;
+  final double strokeWidth;
+  final Color backgroundColor;
+  final Color foregroundColor;
+  final double width;
+
+  CircleProgressBarPainter({
+    this.backgroundColor,
+    @required this.foregroundColor,
+    @required this.percentage,
+    this.width,
+    double strokeWidth,
+  }) : this.strokeWidth = strokeWidth ?? width;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Offset center = size.center(Offset.zero);
+    final Size constrainedSize = size - Offset(this.strokeWidth, this.strokeWidth);
+    final shortestSide = math.min(constrainedSize.width, constrainedSize.height);
+    final foregroundPaint = Paint()
+      ..color = this.foregroundColor
+      ..strokeWidth = this.strokeWidth
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+    final radius = (shortestSide / 2);
+
+    // Start at the top. 0 radians represents the right edge
+    final double startAngle = -(2 * math.pi * 0.25);
+    final double sweepAngle = (2 * math.pi * (this.percentage ?? 0));
+
+    // Don't draw the background if we don't have a background color
+    if (this.backgroundColor != null) {
+      final backgroundPaint = Paint()
+        ..color = this.backgroundColor
+        ..strokeWidth = this.strokeWidth
+        ..style = PaintingStyle.stroke;
+      canvas.drawCircle(center, radius, backgroundPaint);
+    }
+
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      startAngle,
+      sweepAngle,
+      false,
+      foregroundPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(CustomPainter oldDelegate) {
+    final oldPainter = (oldDelegate as CircleProgressBarPainter);
+    return oldPainter.percentage != this.percentage ||
+        oldPainter.backgroundColor != this.backgroundColor ||
+        oldPainter.foregroundColor != this.foregroundColor ||
+        oldPainter.strokeWidth != this.strokeWidth;
+  }
+}
+
+class CircleProgressBar extends StatelessWidget {
+  final Color backgroundColor;
+  final Color foregroundColor;
+  final double value, width;
+  final Widget child;
+
+  const CircleProgressBar({
+    Key key,
+    this.backgroundColor,
+    this.foregroundColor,
+    @required this.value,
+    this.width: 5, this.child
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    final backgroundColor = this.backgroundColor;
+    final foregroundColor = this.foregroundColor;
+
+    _color(){
+      return this.value < .5 ? Colors.red : this.value < .7 ? Colors.orange : Colors.green;
+    }
+
+    return AspectRatio(
+      aspectRatio: 1,
+      child: CustomPaint(
+        child: Center(
+          child: child
+        ),
+        foregroundPainter: CircleProgressBarPainter(
+          width: width,
+          backgroundColor: backgroundColor,
+          foregroundColor: foregroundColor == null ? _color() : foregroundColor,
+          percentage: this.value,
+        ),
+      ),
+    );
+  }
 }
