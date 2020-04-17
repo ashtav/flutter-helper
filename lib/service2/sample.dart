@@ -35,9 +35,7 @@ class _SampleState extends State<Sample> {
               }),
 
               FormControl.button(textButton: 'Button', isSubmit: isSubmit, onTap: (){
-                setState(() {
-                  isSubmit = true;
-                });
+                Wi.box(context, message: 'Lorem ipsum dolor set amet');
               }),
 
               GestureDetector(

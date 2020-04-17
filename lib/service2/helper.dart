@@ -5,9 +5,9 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fluttertoast/fluttertoast.dart';
-import 'package:helper/service2/helper-widget.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:connectivity/connectivity.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/cupertino.dart';
@@ -15,6 +15,8 @@ import 'package:flutter_html/flutter_html.dart';
 import 'package:date_range_picker/date_range_picker.dart' as DateRagePicker;
 import 'package:http/http.dart' as http;
 import 'dart:math' as math;
+
+import 'helper-widget.dart';
 
 
 
@@ -94,6 +96,25 @@ class Cl {
   }
 }
 
+class Message{
+
+  static error(e, {Timer timer}){
+    print('error : '+e.toString());
+    Wi.toast(e.message);
+
+    if(timer != null){
+      timer.toString();
+    }
+  }
+
+  static connection(context, {Timer timer}){
+    Wi.box(context, title: 'Network Connection!', message: 'Sepertinya terjadi masalah pada koneksi internet Anda, periksa jaringan dan pastikan koneksi internet Anda stabil.');
+    if(timer != null){
+      timer.cancel();
+    }
+  }
+}
+
 // get size of screen, Mquery.width(context)
 class Mquery{
 
@@ -124,6 +145,19 @@ class PreventSwipe extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onVerticalDragUpdate: (_){},
+      child: child,
+    );
+  }
+}
+
+// Unfocus(child: Widget)
+class Unfocus extends StatelessWidget {
+  final Widget child; Unfocus({this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: (){ focus(context, FocusNode()); },
       child: child,
     );
   }
@@ -278,7 +312,7 @@ class AnimatedCountState extends State<AnimatedCount> with TickerProviderStateMi
 
 // methods ----------
 
-String __api = 'https://api-url.com';
+String __api = 'https://kpm-api-test.kembarputra.com';
 
 setExistApi() async {
   var prefs = await SharedPreferences.getInstance(),
@@ -360,9 +394,35 @@ ucwords(String str){
 checkConnection() async{
   var connectivityResult = await (Connectivity().checkConnectivity()),
       mobile = connectivityResult == ConnectivityResult.mobile,
-      wifi = connectivityResult == ConnectivityResult.mobile;
-  
-  return mobile ? true : wifi ? true : false;
+      wifi = connectivityResult == ConnectivityResult.wifi;
+
+  return mobile || wifi ? true : false;
+}
+
+// requestPermissions(location: true),then((allowed){ })
+requestPermissions({location: false, Function then}) async{
+  _permissionStatus() async{
+    PermissionStatus status = await PermissionHandler().checkPermissionStatus(PermissionGroup.location);
+    then(status == PermissionStatus.unknown || status == PermissionStatus.denied ? false : true);
+  }
+
+  _checkPermission(PermissionStatus status) async{
+    if(status == PermissionStatus.unknown || status == PermissionStatus.denied){
+      await PermissionHandler().requestPermissions([PermissionGroup.location]);
+      if(then != null) _permissionStatus();
+    }else{ if(then != null) then(true); }
+  }
+
+  if(location){
+    PermissionHandler().checkPermissionStatus(PermissionGroup.location).then(_checkPermission);
+  }
+
+}
+
+setTimer(second, {then}){
+  return Timer(Duration(seconds: second), (){
+    if(then != null) then(true);
+  });
 }
 
 // encode & decode, encode(object) -> string, decode(string) -> object
@@ -614,26 +674,33 @@ class Wi {
   }
 
   // dialog(context, child: Widget)
-  static dialog(context, {dismiss: true, MainAxisAlignment position, @required Widget child, Function then}){
+  static dialog(context, {dismiss: true, forceClose: true, MainAxisAlignment position, @required Widget child, Function then}){
+    Future<bool> onWillPop() {
+      return Future.value(forceClose);
+    }
+
     return showDialog(
       context: context,
       barrierDismissible: dismiss,
       builder: (BuildContext context){
-        return Column(
-          mainAxisAlignment: position == null ? MainAxisAlignment.center : position,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: Mquery.width(context),
-              margin: EdgeInsets.all(15),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: Material(
-                  child: child,
+        return new WillPopScope(
+          onWillPop: onWillPop,
+          child: Column(
+            mainAxisAlignment: position == null ? MainAxisAlignment.center : position,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: Mquery.width(context),
+                margin: EdgeInsets.all(15),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: Material(
+                    child: child,
+                  ),
                 ),
-              ),
-            )
-          ]
+              )
+            ]
+          )
         );
       }
     ).then((res){ if(then != null) then(res); });
@@ -668,7 +735,7 @@ class Wi {
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(5),
                 child: Material(
-                  color: Colors.transparent,
+                  // color: Colors.transparent,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
 
@@ -687,13 +754,24 @@ class Wi {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: <Widget>[
                                   title == null ? SizedBox.shrink() : Container(
-                                    child: title is Widget ? title : html(title, bold: true, size: 17), margin: EdgeInsets.only(bottom: 5), 
+                                    child: title is Widget ? title : html(title, bold: true, size: 14), margin: EdgeInsets.only(bottom: 0), 
                                   ),
                                   message is Widget ? message : html(message)
                               ],)
                             ),
 
                           ],
+                        ),
+                      ),
+
+                      Container(
+                        child: Button(
+                          onTap: (){ Navigator.pop(context); },
+                          padding: EdgeInsets.all(10),
+                          child: Container(
+                            width: Mquery.width(context),
+                            child: text('Tutup', bold: true, align: TextAlign.center)
+                          )
                         ),
                       )
                     ],
@@ -1041,7 +1119,7 @@ class FormControl {
         borderRadius: BorderRadius.circular(4),
         child: Button(
           onTap: isSubmit ? null : onTap, padding: EdgeInsets.all(11),
-          color: isSubmit ? Colors.blueGrey[200] : color == null ? Colors.blueGrey : color,
+          color: isSubmit ? Colors.red[200] : color == null ? Colors.red : color,
           child: Row(
             // mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
@@ -1059,96 +1137,123 @@ class FormControl {
 // apis ----------
 
 class Api {
-  
-  // await create('user', formData: {}, debug: true, then: (res){ })
-  static create(url, {@required formData, debug: false, authorization: true, Function then}) async{
+
+
+
+  // await post('user', formData: {}, debug: true, then: (res){ }, error: (err){ })
+  static post(url, {@required formData, debug: false, authorization: true, Function then, Function error}) async{
     var prefs = await SharedPreferences.getInstance();
 
     checkConnection().then((con){
       if(con){
-        http.post(api(url), body: formData, headers: !authorization ? {} : {
-          HttpHeaders.authorizationHeader: prefs.getString('token'), 'Accept': 'application/json'
-        }).then((res){
-          if(debug){
-            print('# request : '+res.request.toString());
-            print('# status : '+res.statusCode.toString());
-            print('# body : '+res.body.toString());
-          }
+        try {
+          http.post(api(url), body: formData, headers: !authorization ? {} : {
+            HttpHeaders.authorizationHeader: prefs.getString('token'), 'Accept': 'application/json'
+          }).then((res){
+            if(debug){
+              print('# request : '+res.request.toString());
+              print('# status : '+res.statusCode.toString());
+              print('# body : '+res.body.toString());
+            }
 
-          if(then != null) then(res);
-        });
+            if(then != null) then(res.statusCode, res.body);
+          });
+        } catch (e) {
+          if(e is PlatformException) {
+            if(error != null) error(e.message);
+          }
+        }
       }else{
         Wi.toast('Check your internet connection!');
       }
     });
   }
 
-  // await read('user', debug: true, then: (res){ })
-  static read(url, {@required formData, debug: false, authorization: true, Function then}) async{
+  // await get('user', debug: true, then: (res){ }, error: (err){ })
+  static get(url, {debug: false, authorization: true, Function then, Function error}) async{
     var prefs = await SharedPreferences.getInstance();
 
     checkConnection().then((con){
       if(con){
-        http.get(api(url), headers: !authorization ? {} : {
-          HttpHeaders.authorizationHeader: prefs.getString('token'), 'Accept': 'application/json'
-        }).then((res){
-          if(debug){
-            print('# request : '+res.request.toString());
-            print('# status : '+res.statusCode.toString());
-            print('# body : '+res.body.toString());
-          }
+        try {
+          http.get(api(url), headers: !authorization ? {} : {
+            HttpHeaders.authorizationHeader: prefs.getString('token'), 'Accept': 'application/json'
+          }).then((res){
+            if(debug){
+              print('# request : '+res.request.toString());
+              print('# status : '+res.statusCode.toString());
+              print('# body : '+res.body.toString());
+            }
 
-          if(then != null) then(res);
-        });
+            if(then != null) then(res.statusCode, res.body);
+          });
+        } catch (e) {
+          if(e is PlatformException) {
+            if(error != null) error(e.message);
+          }
+        }
       }else{
         Wi.toast('Check your internet connection!');
       }
     });
   }
 
-  // await update('user/1', formData: {}, debug: true, then: (res){ })
-  static update(url, {@required formData, debug: false, authorization: true, Function then}) async{
+  // await put('user', formData: {}, debug: true, then: (res){ }, error: (err){ })
+  static put(url, {@required formData, debug: false, authorization: true, Function then, Function error}) async{
     var prefs = await SharedPreferences.getInstance();
 
     checkConnection().then((con){
       if(con){
-        http.put(api(url), body: formData, headers: !authorization ? {} : {
-          HttpHeaders.authorizationHeader: prefs.getString('token'), 'Accept': 'application/json'
-        }).then((res){
-          if(debug){
-            print('# request : '+res.request.toString());
-            print('# status : '+res.statusCode.toString());
-            print('# body : '+res.body.toString());
-          }
+        try {
+          http.put(api(url), body: formData, headers: !authorization ? {} : {
+            HttpHeaders.authorizationHeader: prefs.getString('token'), 'Accept': 'application/json'
+          }).then((res){
+            if(debug){
+              print('# request : '+res.request.toString());
+              print('# status : '+res.statusCode.toString());
+              print('# body : '+res.body.toString());
+            }
 
-          if(then != null) then(res);
-        });
+            if(then != null) then(res.statusCode, res.body);
+          });
+        } catch (e) {
+          if(e is PlatformException) {
+            if(error != null) error(e.message);
+          }
+        }
       }else{
         Wi.toast('Check your internet connection!');
       }
     });
   }
 
-  // await delete('user/1', debug: true, then: (res){ })
-  static delete(url, {@required formData, debug: false, authorization: true, Function then}) async{
+  // await delete('user/1', debug: true, then: (res){ }, error: (err){ })
+  static delete(url, {@required formData, debug: false, authorization: true, Function then, Function error}) async{
     var prefs = await SharedPreferences.getInstance();
 
     checkConnection().then((con){
       if(con){
-        http.delete(api(url), headers: !authorization ? {} : {
-          HttpHeaders.authorizationHeader: prefs.getString('token'), 'Accept': 'application/json'
-        }).then((res){
-          if(debug){
-            print('# request : '+res.request.toString());
-            print('# status : '+res.statusCode.toString());
-            print('# body : '+res.body.toString());
-          }
+        try {
+          http.delete(api(url), headers: !authorization ? {} : {
+            HttpHeaders.authorizationHeader: prefs.getString('token'), 'Accept': 'application/json'
+          }).then((res){
+            if(debug){
+              print('# request : '+res.request.toString());
+              print('# status : '+res.statusCode.toString());
+              print('# body : '+res.body.toString());
+            }
 
-          if(then != null) then(res);
-        });
+            if(then != null) then(res.statusCode, res.body);
+          });
+        } catch (e) {
+          if(e is PlatformException) {
+            if(error != null) error(e.message);
+          }
+        }
       }else{
         Wi.toast('Check your internet connection!');
       }
     });
   }
+
 }
